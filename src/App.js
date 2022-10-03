@@ -1,89 +1,115 @@
 import './App.css';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
+import ringer from './notif.wav'
 
 import { BiUpArrow, BiDownArrow } from 'react-icons/bi';
 import { GrPowerReset, GrCirclePlay } from 'react-icons/gr';
-import { useRef, useState } from 'react';
-import Countdown from 'react-countdown';
+import { useEffect, useRef, useState } from 'react';
 
 function App() {
   const [breakLength, setBreakLength] = useState(5)
-  const [sessionLength, setSessionLength] = useState(3)
-  const [manualStart, setManualStart] = useState(false)
-
-  const countDownRef = useRef()
+  const [sessionLength, setSessionLength] = useState(25)
+  const [isStarted, setIsStarted] = useState(false)
+  const [isReset, setIsReset] = useState(true)
+  const [timer, setTimer] = useState(25 * 60*1000)
+  const [formattedTimer, setFormattedTimer] = useState("")
+  const [isBreak, setIsBreak] = useState(false)
+  const audioRef = useRef()
 
   const breakInc = () => {
-    setBreakLength(breakLength + 1)
+    if (breakLength < 60) {
+      setBreakLength(breakLength + 1)
+      setTimer((breakLength + 1) * 60*1000)
+      updateFormattedTimer();
+    }
   }
   const breakDec = () => {
-    if (breakLength > 0) setBreakLength(breakLength - 1)
+    if (breakLength > 1) {
+      setBreakLength(breakLength - 1)
+      setTimer((breakLength - 1) * 60*1000)
+      updateFormattedTimer();
+    }
   }
   const sessionInc = () => {
-    setSessionLength(sessionLength + 1)
+    if (sessionLength < 60) {
+      setSessionLength(sessionLength + 1)
+      setTimer((sessionLength + 1) * 60 * 1000)
+      updateFormattedTimer();
+    }
   }
   const sessionDec = () => {
-    if (sessionLength > 0) setSessionLength(sessionLength - 1)
+    if (sessionLength > 1) {
+      setSessionLength(sessionLength - 1)
+      setTimer((sessionLength - 1) * 60 * 1000)
+      updateFormattedTimer();
+    }
     console.log("--");
   }
 
 
-
-  const rendererBreak = ({ hours, minutes, seconds, completed }) => {
-
-    console.log("Break");
-    minutes += hours * 60;
-    if (completed) {
-      return (<Countdown renderer={rendererSession}
-        date={Date.now() + (sessionLength * 1000 * 60)}
-        autoStart={true}
-        ref={countDownRef} />);
-    } else {
-      // Render a countdown
-      console.log();
-      return <span>{(minutes < 10) ? "0" + minutes : minutes}:{(seconds < 10) ? "0" + seconds : seconds}</span>;
-    }
-  };
-
-
-  const rendererSession = ({ hours, minutes, seconds, completed, started }) => {
-    console.log("Session");
-    minutes += hours * 60;
-    if (completed) {
-      if (manualStart) return(<Countdown renderer={rendererBreak}
-        date={Date.now() + (breakLength * 1000 * 60)}
-        autoStart={true}
-        ref={countDownRef} />);
-      else {
-      console.log(manualStart);
-      return <span>{(minutes < 10) ? "0" + minutes : minutes}:{(seconds < 10) ? "0" + seconds : seconds}</span>;}
-
-    } 
-    else {
-      // Render a countdown
-      console.log();
-      return <span>{(minutes < 10) ? "0" + minutes : minutes}:{(seconds < 10) ? "0" + seconds : seconds}</span>;
-    }
-
-  };
-
   const startStopHandler = () => {
-    if (!countDownRef.current.isStarted()) {
-      countDownRef.current.start()
-      setManualStart(true)
-    } else countDownRef.current.pause();
-
-    console.log(countDownRef.current);
+    setIsStarted(!isStarted)
+    timerHandler()
+    setIsReset(false)
+    console.log(timer + " FROM START/STOP");
   }
 
   const resetHandler = () => {
-    countDownRef.current.stop()
+    setIsStarted(false)
+    setIsReset(true)
     setBreakLength(5)
-    setSessionLength(2)
-    setManualStart(false
-      )
+    setSessionLength(25)
+    setTimer(25 * 60 * 1000)
+    setFormattedTimer(`25:00`);
+    setIsBreak(false)
+    console.log(timer + " FROM RESET");
+    console.log("Before stop: "+audioRef.current.paused);
+    audioRef.current.load()
+    console.log("After stop: "+audioRef.current.paused);
+
   }
+
+  const timerHandler = () => {
+    if (isStarted) {
+      if (timer > 0) {
+        setTimeout(() => { setTimer(timer - 499); console.log(timer + " FROM TIMEOUT"); }, 499);
+      }
+      else {
+        audioRef.current.play()
+        if (!isBreak) {
+          setTimer(breakLength * 60 * 1000);
+          setIsBreak(true)
+        } else {
+
+          setTimer(sessionLength * 60 * 1000);
+          setIsBreak(false)
+        }
+
+        console.log(timer + " FROM TIMEHANDLER");
+      }
+    }
+  }
+
+  function padTo2Digits(num) {
+    return num.toString().padStart(2, '0');
+  }
+  const updateFormattedTimer = () => {
+    setFormattedTimer(`${padTo2Digits(Math.floor(timer / 60 / 1000))}:${padTo2Digits(Math.round((timer) / 1000 % 60))}`)
+  }
+  useEffect(() => {
+
+    timerHandler()
+    if ((!isReset)) {
+      setFormattedTimer(`${padTo2Digits(Math.floor(timer / 60 / 1000))}:${padTo2Digits(Math.round((timer) / 1000 % 60))}`)
+    } else {
+      let currentTime = isBreak ? breakLength : sessionLength
+      setTimer(currentTime * 60*1000)
+      setFormattedTimer(`${padTo2Digits((currentTime))}:${padTo2Digits(currentTime * 60 % 60)}`);
+    }
+    
+
+  }, [timer, isStarted, sessionLength, isReset, isBreak, breakLength])
 
   return (
     <div className="container-fluid">
@@ -109,12 +135,8 @@ function App() {
             </div>
           </div>
           <div className='row d-flex my-3'>
-            <h2 id="timer-label">Session</h2>
-            <p id="time-left">
-              <Countdown renderer={rendererSession}
-                date={Date.now() + (sessionLength * 1000 * 60)}
-                autoStart={false}
-                ref={countDownRef} />
+            <h2 id="timer-label">Session {isBreak ? <p>Break</p> : <p>Work!</p>}</h2>
+            <p id="time-left">{formattedTimer}
             </p>
           </div>
           <div className='row d-flex  justify-content-around'>
@@ -123,6 +145,7 @@ function App() {
           </div>
         </div>
       </div>
+      <audio src={ringer} ref={audioRef} id="beep"></audio>
     </div>
   );
 }
